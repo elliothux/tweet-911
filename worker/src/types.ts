@@ -9,6 +9,8 @@ export interface ScoreRequest {
 }
 
 export interface Env {
+  /** AI Gateway name; defaults to cloudflareos-ai */
+  AI_GATEWAY_ID?: string;
   AI: Ai;
   API_KEY?: string;
 }

@@ -5,6 +5,9 @@
   "compatibility_date": "2026-09-01",
   "ai": {
     "binding": "AI"
+  },
+  "vars": {
+    "AI_GATEWAY_ID": "cloudflareos-ai"
   }
   // After deploy, set optional secret:
   //   npx wrangler secret put API_KEY

@@ -73,8 +73,9 @@ export async function runScore(
   env: Env,
   body: ScoreRequest,
 ): Promise<ScoreResponse> {
-  // Third-party models (typesafe/jev) require AI Gateway + Unified Billing credits.
-  // "default" auto-creates a gateway on first authenticated request.
+  // Third-party models (typesafe/jev) route through an existing AI Gateway.
+  // Override with wrangler var AI_GATEWAY_ID (default: cloudflareos-ai).
+  const gatewayId = (env.AI_GATEWAY_ID || "cloudflareos-ai").trim() || "cloudflareos-ai";
   const jev = (await env.AI.run(
     JEV_MODEL,
     {
@@ -84,7 +85,7 @@ export async function runScore(
         ai_score: AI_SCORE_QUESTION,
       },
     },
-    { gateway: { id: "default" } },
+    { gateway: { id: gatewayId } },
   )) as JevResponse;
 
   return mapJevToScore(jev);
