@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "slop-911",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "ai": {
+    "binding": "AI"
+  }
+  // After deploy, set optional secret:
+  //   npx wrangler secret put API_KEY
+  // Or leave unset for open/dev access.
+}
