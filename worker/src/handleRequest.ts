@@ -1,7 +1,14 @@
 import { checkAuth } from "./auth";
+import { buildQuote, readCache, writeCache } from "./cache";
 import { corsHeaders, withCors } from "./cors";
+import {
+  RateLimitExceededError,
+  clientIp,
+  consumeDailyQuota,
+} from "./rateLimit";
 import { runScore, validateScoreBody } from "./score";
-import type { Env } from "./types";
+import { kvFromBinding } from "./storage";
+import type { Env, ScoreApiResponse } from "./types";
 
 export async function handleRequest(
   request: Request,
@@ -50,13 +57,77 @@ async function handleScore(request: Request, env: Env): Promise<Response> {
     );
   }
 
+  if (!env.KV) {
+    return Response.json(
+      {
+        error: "misconfigured",
+        details: "KV binding missing — create namespace and bind as KV",
+      },
+      { status: 500 },
+    );
+  }
+
+  const store = kvFromBinding(env.KV);
+  const ip = clientIp(request);
+
+  let rate_limit;
   try {
-    const result = await runScore(env, validated.data);
-    return Response.json(result);
+    rate_limit = await consumeDailyQuota(store, ip);
+  } catch (err) {
+    if (err instanceof RateLimitExceededError) {
+      return Response.json(
+        {
+          error: "rate_limited",
+          details: err.message,
+          rate_limit: err.info,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(
+              Math.max(
+                1,
+                Math.ceil(
+                  (Date.parse(err.info.reset) - Date.now()) / 1000,
+                ),
+              ),
+            ),
+          },
+        },
+      );
+    }
+    throw err;
+  }
+
+  const body = validated.data;
+  const quoteFromBody = buildQuote(body.text ?? "");
+
+  try {
+    const cached = await readCache(store, body.url);
+    if (cached) {
+      const payload: ScoreApiResponse = {
+        ...cached.entry.result,
+        quote: cached.entry.quote || quoteFromBody,
+        cache: cached.info,
+        rate_limit,
+      };
+      return Response.json(payload);
+    }
+
+    const result = await runScore(env, body);
+    const quote = quoteFromBody;
+    const cache = await writeCache(store, body.url, result, quote);
+    const payload: ScoreApiResponse = {
+      ...result,
+      quote,
+      cache,
+      rate_limit,
+    };
+    return Response.json(payload);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json(
-      { error: "score_failed", details: message },
+      { error: "score_failed", details: message, rate_limit },
       { status: 502 },
     );
   }

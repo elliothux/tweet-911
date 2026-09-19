@@ -66,6 +66,14 @@ npm run deploy    # wrangler deploy
 
 Labels: `likely_ai` (noul ≥ 0.65), `likely_human` (≤ 0.35), else `uncertain`.
 
+
+### Cache & rate limit
+
+- **Cache key:** normalized source `url` (required). Hits skip TypeSafe.
+- **Response extras:** `quote` (text excerpt), `cache: { hit, key, source_url, cached_at }`, `rate_limit: { limit, remaining, used, reset, day }`.
+- **Rate limit:** 30 requests per client IP per UTC day (`CF-Connecting-IP`). Exceeded → HTTP `429`.
+- **Storage:** Workers KV binding `KV` (namespace title `slop-911`).
+
 ### TypeSafe API key
 
 The Worker calls TypeSafe directly (same path as [sift](https://github.com/bohutang/sift)). Set the secret:

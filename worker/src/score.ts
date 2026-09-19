@@ -138,7 +138,18 @@ export function validateScoreBody(
   const platform =
     b.platform === "x" || b.platform === "linkedin" ? b.platform : undefined;
   const author = typeof b.author === "string" ? b.author : undefined;
-  const url = typeof b.url === "string" ? b.url : undefined;
+  const url = typeof b.url === "string" ? b.url.trim() : "";
+  if (!url) {
+    return { ok: false, error: "url (source post URL) is required for caching" };
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { ok: false, error: "url must be http(s)" };
+    }
+  } catch {
+    return { ok: false, error: "url must be a valid URL" };
+  }
 
   return {
     ok: true,

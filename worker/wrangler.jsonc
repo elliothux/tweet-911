@@ -5,8 +5,15 @@
   "compatibility_date": "2026-09-01",
   "vars": {
     "TYPESAFE_MODEL": "jev-latest"
-  }
-  // Secrets (do not commit):
+  },
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "8469d90f7e2549bc88286dc6e4dc7b48",
+      "preview_id": "7461e06751e74811a6e87f0beaf75770"
+    }
+  ]
+  // Secrets:
   //   npx wrangler secret put TYPESAFE_API_KEY
   // Optional Worker client auth:
   //   npx wrangler secret put API_KEY
