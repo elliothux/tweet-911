@@ -3,13 +3,11 @@
   "name": "slop-911",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
-  "ai": {
-    "binding": "AI"
-  },
   "vars": {
-    "AI_GATEWAY_ID": "cloudflareos-ai"
+    "TYPESAFE_MODEL": "jev-latest"
   }
-  // After deploy, set optional secret:
+  // Secrets (do not commit):
+  //   npx wrangler secret put TYPESAFE_API_KEY
+  // Optional Worker client auth:
   //   npx wrangler secret put API_KEY
-  // Or leave unset for open/dev access.
 }

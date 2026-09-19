@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleRequest } from "../src/handleRequest";
-import { JEV_MODEL, labelFromNoul, mapJevToScore } from "../src/score";
+import {
+  DEFAULT_MODEL,
+  TYPESAFE_API_URL,
+  labelFromNoul,
+  mapJevToScore,
+} from "../src/score";
 import type { Env, JevResponse } from "../src/types";
 
 function mockEnv(overrides: Partial<Env> = {}): Env {
-  const aiRun = vi.fn();
   return {
-    AI: { run: aiRun } as unknown as Ai,
+    TYPESAFE_API_KEY: "ts-test-key",
     ...overrides,
   };
 }
@@ -26,6 +30,22 @@ function jevOk(noul = 0.87): JevResponse {
     },
     usage: { input_tokens: 100, output_tokens: 40 },
   };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+function stubTypeSafe(response: JevResponse | { error: string }, status = 200) {
+  const fetchMock = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify(response), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }
 
 describe("labelFromNoul", () => {
@@ -96,8 +116,8 @@ describe("POST /v1/score validation", () => {
   });
 
   it("allows images-only", async () => {
+    stubTypeSafe(jevOk(0.2));
     const env = mockEnv();
-    (env.AI.run as ReturnType<typeof vi.fn>).mockResolvedValue(jevOk(0.2));
     const res = await handleRequest(
       new Request("https://example.com/v1/score", {
         method: "POST",
@@ -117,10 +137,9 @@ describe("POST /v1/score validation", () => {
 });
 
 describe("POST /v1/score success", () => {
-  it("calls Jev and maps response", async () => {
+  it("calls TypeSafe and maps response", async () => {
+    const fetchMock = stubTypeSafe(jevOk(0.88));
     const env = mockEnv();
-    const run = env.AI.run as ReturnType<typeof vi.fn>;
-    run.mockResolvedValue(jevOk(0.88));
 
     const res = await handleRequest(
       new Request("https://example.com/v1/score", {
@@ -145,10 +164,31 @@ describe("POST /v1/score success", () => {
     expect(body.label).toBe("likely_ai");
     expect(body.model).toBe("jev-1.13.0");
 
-    expect(run).toHaveBeenCalledOnce();
-    expect(run.mock.calls[0][0]).toBe(JEV_MODEL);
-    expect(run.mock.calls[0][1].questions.ai_written.type).toBe("noul");
-    expect(run.mock.calls[0][1].state.text).toContain("paradigm");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(TYPESAFE_API_URL);
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer ts-test-key",
+    );
+    const payload = JSON.parse(String(init.body));
+    expect(payload.model).toBe(DEFAULT_MODEL);
+    expect(payload.questions.ai_written.type).toBe("noul");
+    expect(payload.state.text).toContain("paradigm");
+  });
+
+  it("fails clearly when TYPESAFE_API_KEY missing", async () => {
+    const env = mockEnv({ TYPESAFE_API_KEY: "" });
+    const res = await handleRequest(
+      new Request("https://example.com/v1/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "hello" }),
+      }),
+      env,
+    );
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { details: string };
+    expect(body.details).toMatch(/TYPESAFE_API_KEY/);
   });
 });
 
@@ -207,8 +247,8 @@ describe("API key auth", () => {
   });
 
   it("accepts Bearer token", async () => {
+    stubTypeSafe(jevOk(0.5));
     const env = mockEnv({ API_KEY: "secret-key" });
-    (env.AI.run as ReturnType<typeof vi.fn>).mockResolvedValue(jevOk(0.5));
     const res = await handleRequest(
       new Request("https://example.com/v1/score", {
         method: "POST",
@@ -224,8 +264,8 @@ describe("API key auth", () => {
   });
 
   it("accepts X-API-Key", async () => {
+    stubTypeSafe(jevOk(0.4));
     const env = mockEnv({ API_KEY: "secret-key" });
-    (env.AI.run as ReturnType<typeof vi.fn>).mockResolvedValue(jevOk(0.4));
     const res = await handleRequest(
       new Request("https://example.com/v1/score", {
         method: "POST",
@@ -241,8 +281,8 @@ describe("API key auth", () => {
   });
 
   it("allows open access when API_KEY unset", async () => {
+    stubTypeSafe(jevOk(0.1));
     const env = mockEnv({ API_KEY: "" });
-    (env.AI.run as ReturnType<typeof vi.fn>).mockResolvedValue(jevOk(0.1));
     const res = await handleRequest(
       new Request("https://example.com/v1/score", {
         method: "POST",

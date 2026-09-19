@@ -2,7 +2,7 @@
 
 Chrome extension + Cloudflare Worker that scores whether an X or LinkedIn post looks AI-written.
 
-Click a small **911** button on a post → extract text + image URLs → `POST /v1/score` on your Worker → TypeSafe **Jev** (`typesafe/jev` on Workers AI) returns a calibrated probability and label.
+Click a small **911** button on a post → extract text + image URLs → `POST /v1/score` on your Worker → TypeSafe **Jev** via `https://api.typesafe.ai/v1/systemone` returns a calibrated probability and label.
 
 **Architecture:** the Worker API is the product (`content → score`). The extension is a thin on-demand client. Nothing calls `api.typesafe.ai`.
 
@@ -34,8 +34,9 @@ npm run deploy    # wrangler deploy
 
 ### Config
 
-- `wrangler.jsonc` — AI binding `{ "binding": "AI", "type": "ai" }` (declared as `"ai": { "binding": "AI" }`)
-- Optional auth: `npx wrangler secret put API_KEY`  
+- `wrangler.jsonc` — no AI binding; Worker fetches TypeSafe over HTTPS
+- Required: `npx wrangler secret put TYPESAFE_API_KEY`
+- Optional Worker client auth: `npx wrangler secret put API_KEY`  
   When set, clients must send `Authorization: Bearer <key>` or `X-API-Key: <key>`.  
   When unset, the API is open (convenient for local/dev).
 - Copy `.dev.vars.example` → `.dev.vars` for local secrets.
@@ -65,15 +66,18 @@ npm run deploy    # wrangler deploy
 
 Labels: `likely_ai` (noul ≥ 0.65), `likely_human` (≤ 0.35), else `uncertain`.
 
-### AI Gateway credits (required for Jev)
+### TypeSafe API key
 
-`typesafe/jev` is a **third-party** Workers AI model. It bills through [AI Gateway Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/). Top up credits in the dashboard:
+The Worker calls TypeSafe directly (same path as [sift](https://github.com/bohutang/sift)). Set the secret:
 
-1. Open [AI Gateway → Credits](https://dash.cloudflare.com/?to=/:account/ai/ai-gateway)
-2. **Credits Available → Manage → Top-up credits**
-3. Ensure the `default` gateway uses Unified billing for Workers AI
+```bash
+cd worker
+npx wrangler secret put TYPESAFE_API_KEY
+```
 
-Without credits, `/v1/score` returns `502` with `Insufficient AI Gateway credits`. Native `@cf/*` models are unrelated.
+Optional: `TYPESAFE_MODEL` (default `jev-latest` via wrangler vars).
+
+No Cloudflare AI Gateway / Unified Billing credits required.
 
 ### curl
 

@@ -9,9 +9,11 @@ export interface ScoreRequest {
 }
 
 export interface Env {
-  /** AI Gateway name; defaults to cloudflareos-ai */
-  AI_GATEWAY_ID?: string;
-  AI: Ai;
+  /** TypeSafe API key (secret). Required for /v1/score. */
+  TYPESAFE_API_KEY?: string;
+  /** Optional model override; default jev-latest */
+  TYPESAFE_MODEL?: string;
+  /** Optional Worker client auth */
   API_KEY?: string;
 }
 

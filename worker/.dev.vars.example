@@ -1,2 +1,2 @@
-# Optional. If set, clients must send Authorization: Bearer <key> or X-API-Key: <key>
-API_KEY=
+TYPESAFE_API_KEY=
+# API_KEY=

@@ -6,7 +6,9 @@ import type {
   ScoreResponse,
 } from "./types";
 
-export const JEV_MODEL = "typesafe/jev";
+/** TypeSafe System One endpoint (same as sift). */
+export const TYPESAFE_API_URL = "https://api.typesafe.ai/v1/systemone";
+export const DEFAULT_MODEL = "jev-latest";
 
 export const AI_WRITTEN_QUESTION = {
   type: "noul" as const,
@@ -64,30 +66,53 @@ export function mapJevToScore(jev: JevResponse): ScoreResponse {
         ? scoreAns.confidence
         : undefined,
     label: labelFromNoul(clamped),
-    model: jev.model ?? JEV_MODEL,
+    model: jev.model ?? DEFAULT_MODEL,
     usage: jev.usage,
   };
+}
+
+export async function callTypeSafe(
+  apiKey: string,
+  state: Record<string, unknown>,
+  model: string,
+): Promise<JevResponse> {
+  const res = await fetch(TYPESAFE_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      state,
+      model,
+      questions: {
+        ai_written: AI_WRITTEN_QUESTION,
+        ai_score: AI_SCORE_QUESTION,
+      },
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`TypeSafe HTTP ${res.status}: ${text.slice(0, 300)}`);
+  }
+  try {
+    return JSON.parse(text) as JevResponse;
+  } catch {
+    throw new Error("TypeSafe returned invalid JSON");
+  }
 }
 
 export async function runScore(
   env: Env,
   body: ScoreRequest,
 ): Promise<ScoreResponse> {
-  // Third-party models (typesafe/jev) route through an existing AI Gateway.
-  // Override with wrangler var AI_GATEWAY_ID (default: cloudflareos-ai).
-  const gatewayId = (env.AI_GATEWAY_ID || "cloudflareos-ai").trim() || "cloudflareos-ai";
-  const jev = (await env.AI.run(
-    JEV_MODEL,
-    {
-      state: buildState(body),
-      questions: {
-        ai_written: AI_WRITTEN_QUESTION,
-        ai_score: AI_SCORE_QUESTION,
-      },
-    },
-    { gateway: { id: gatewayId } },
-  )) as JevResponse;
-
+  const apiKey = env.TYPESAFE_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("TYPESAFE_API_KEY is not configured on the Worker");
+  }
+  const model = env.TYPESAFE_MODEL?.trim() || DEFAULT_MODEL;
+  const jev = await callTypeSafe(apiKey, buildState(body), model);
   return mapJevToScore(jev);
 }
 
