@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = "https://slop-911.YOUR_SUBDOMAIN.workers.dev";
+const DEFAULT_API_BASE = "https://slop-911.hqy841440305.workers.dev";
 
 async function load() {
   const { apiBaseUrl, apiKey } = await chrome.storage.sync.get([

@@ -65,10 +65,20 @@ npm run deploy    # wrangler deploy
 
 Labels: `likely_ai` (noul ≥ 0.65), `likely_human` (≤ 0.35), else `uncertain`.
 
+### AI Gateway credits (required for Jev)
+
+`typesafe/jev` is a **third-party** Workers AI model. It bills through [AI Gateway Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/). Top up credits in the dashboard:
+
+1. Open [AI Gateway → Credits](https://dash.cloudflare.com/?to=/:account/ai/ai-gateway)
+2. **Credits Available → Manage → Top-up credits**
+3. Ensure the `default` gateway uses Unified billing for Workers AI
+
+Without credits, `/v1/score` returns `502` with `Insufficient AI Gateway credits`. Native `@cf/*` models are unrelated.
+
 ### curl
 
 ```bash
-curl -sS https://slop-911.YOUR_SUBDOMAIN.workers.dev/v1/score \
+curl -sS https://slop-911.hqy841440305.workers.dev/v1/score \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer YOUR_KEY' \
   -d '{
@@ -81,7 +91,7 @@ curl -sS https://slop-911.YOUR_SUBDOMAIN.workers.dev/v1/score \
 Health:
 
 ```bash
-curl -sS https://slop-911.YOUR_SUBDOMAIN.workers.dev/health
+curl -sS https://slop-911.hqy841440305.workers.dev/health
 ```
 
 ## Extension

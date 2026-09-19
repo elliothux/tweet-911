@@ -73,13 +73,19 @@ export async function runScore(
   env: Env,
   body: ScoreRequest,
 ): Promise<ScoreResponse> {
-  const jev = (await env.AI.run(JEV_MODEL, {
-    state: buildState(body),
-    questions: {
-      ai_written: AI_WRITTEN_QUESTION,
-      ai_score: AI_SCORE_QUESTION,
+  // Third-party models (typesafe/jev) require AI Gateway + Unified Billing credits.
+  // "default" auto-creates a gateway on first authenticated request.
+  const jev = (await env.AI.run(
+    JEV_MODEL,
+    {
+      state: buildState(body),
+      questions: {
+        ai_written: AI_WRITTEN_QUESTION,
+        ai_score: AI_SCORE_QUESTION,
+      },
     },
-  })) as JevResponse;
+    { gateway: { id: "default" } },
+  )) as JevResponse;
 
   return mapJevToScore(jev);
 }
