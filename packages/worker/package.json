@@ -1,17 +1,17 @@
 {
-  "name": "tweet-911-worker",
+  "name": "@tweet-911/worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --ip 127.0.0.1 --port 8788 --inspector-port 9230",
     "deploy": "wrangler deploy",
     "types": "wrangler types",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260918.1",
+    "@cloudflare/workers-types": "^4.20250917.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4",
     "wrangler": "^4.34.0"

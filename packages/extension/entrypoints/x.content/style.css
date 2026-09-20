@@ -1,0 +1,95 @@
+:host {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  height: 100%;
+  align-items: center;
+  align-self: stretch;
+  margin: 0;
+  overflow: visible;
+  font-family: Tweet911Sans, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", Helvetica, Arial, sans-serif !important;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+.t911-shell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-left: 20px;
+  box-sizing: content-box;
+}
+
+.t911 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  background: #000;
+  color: #71767b;
+  border: 1px solid rgb(47, 51, 54);
+  font-family: inherit !important;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.t911--mid {
+  background: #ffd400;
+  color: #000;
+  border-color: #ca8a04;
+}
+
+.t911--high {
+  background: #f4212e;
+  color: #000;
+  border-color: #c01520;
+}
+
+.t911--pending,
+.t911--error {
+  background: #2f3336;
+  color: #71767b;
+  border-color: #536471;
+}
+
+.t911-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit !important;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.t911-metric svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  stroke: currentColor;
+}
+
+.t911-n {
+  color: inherit;
+  font-family: inherit !important;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}

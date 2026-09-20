@@ -1,0 +1,20 @@
+{
+  "name": "tweet-911",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "bun@1.4.2",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "bun run --filter './packages/*' --parallel dev",
+    "dev:extension": "bun run --cwd packages/extension dev",
+    "dev:firefox": "bun run --cwd packages/extension dev:firefox",
+    "dev:worker": "bun run --cwd packages/worker dev",
+    "extension:build": "bun run --cwd packages/extension build",
+    "extension:zip": "bun run --cwd packages/extension zip",
+    "extension:compile": "bun run --cwd packages/extension compile",
+    "test": "bun run --cwd packages/worker vitest run",
+    "test:worker": "bun run --cwd packages/worker vitest run",
+    "deploy:worker": "bun run --cwd packages/worker wrangler deploy",
+    "types:worker": "bun run --cwd packages/worker wrangler types"
+  }
+}

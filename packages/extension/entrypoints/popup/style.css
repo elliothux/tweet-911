@@ -1,0 +1,55 @@
+html,
+body,
+#root {
+  margin: 0;
+  width: 440px;
+  min-height: 0;
+  background: var(--animal-bg-color);
+}
+
+.popup-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.popup-stat-label {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.popup-stat-value {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.popup-stat-unit {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.popup-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  font-size: 13px;
+}
+
+.popup-links a {
+  color: var(--animal-text-color);
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.popup-meme {
+  display: block;
+  width: 168px;
+  height: auto;
+  margin: 16px auto 0;
+}

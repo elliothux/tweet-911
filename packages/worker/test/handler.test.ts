@@ -1,6 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRequest } from "../src/handleRequest";
-import { DAILY_LIMIT } from "../src/rateLimit";
+import {
+  formatBatchLog,
+  formatScoreLog,
+  signalEmoji,
+} from "../src/log";
 import {
   DEFAULT_MODEL,
   TYPESAFE_API_URL,
@@ -16,8 +20,14 @@ function memoryKv(): KVNamespace {
   const mem = new MemoryStore();
   return {
     get: (key: string) => mem.get(key),
-    put: (key: string, value: string, options?: { expirationTtl?: number }) =>
-      mem.put(key, value, options),
+    put: (
+      key: string,
+      value: string,
+      options?: { expirationTtl?: number; metadata?: unknown },
+    ) => mem.put(key, value, options),
+    delete: (key: string) => mem.delete(key),
+    list: (options?: { prefix?: string; cursor?: string; limit?: number }) =>
+      mem.list(options),
   } as unknown as KVNamespace;
 }
 
@@ -49,6 +59,10 @@ function jevOk(
     usage: { input_tokens: 100, output_tokens: 40 },
   };
 }
+
+beforeEach(() => {
+  vi.spyOn(console, "log").mockImplementation(() => {});
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -172,13 +186,12 @@ describe("POST /v1/score validation", () => {
   });
 });
 
-describe("cache + quote + rate_limit", () => {
+describe("cache + quote", () => {
   it("miss then hit; returns quote and cache info", async () => {
     const fetchMock = stubTypeSafe(jevOk(0.88));
     const env = mockEnv();
     const headers = {
       "Content-Type": "application/json",
-      "CF-Connecting-IP": "1.2.3.4",
     };
     const payload = {
       text: "It's not just a tool. It's a paradigm shift.",
@@ -200,7 +213,6 @@ describe("cache + quote + rate_limit", () => {
     const missBody = (await miss.json()) as {
       cache: { hit: boolean; cached_at: string };
       quote: string;
-      rate_limit: { used: number; remaining: number; limit: number };
       ai_written: number;
       porn_solicitation: number;
       paraphrase_bot: number;
@@ -217,8 +229,6 @@ describe("cache + quote + rate_limit", () => {
     expect(missBody.ai_label).toBe("likely_ai");
     expect(missBody.solicitation_label).toBe("likely_clean");
     expect(missBody.paraphrase_label).toBe("likely_original");
-    expect(missBody.rate_limit.used).toBe(1);
-    expect(missBody.rate_limit.remaining).toBe(DAILY_LIMIT - 1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const hit = await handleRequest(
@@ -233,57 +243,150 @@ describe("cache + quote + rate_limit", () => {
       cache: { hit: boolean };
       ai_written: number;
       porn_solicitation: number;
-      rate_limit: { used: number };
     };
     expect(hitBody.cache.hit).toBe(true);
     expect(hitBody.ai_written).toBe(0.88);
     expect(hitBody.porn_solicitation).toBe(0.12);
-    expect(hitBody.rate_limit.used).toBe(2);
     expect(fetchMock).toHaveBeenCalledTimes(1); // no second TypeSafe call
   });
+});
 
-  it("rate limits after 30 requests per IP per UTC day", async () => {
-    stubTypeSafe(jevOk(0.5));
+describe("score logs", () => {
+  it("formats a live judgment with timing and scores", () => {
+    const line = formatScoreLog({
+      ok: true,
+      ms: 1823,
+      body: {
+        text: "hello",
+        url: sampleUrl,
+        kind: "tweet",
+        author: { handle: "@example" },
+      },
+      result: {
+        ...mapJevToScore(jevOk(0.87, 0.12, 0.08)),
+        quote: "hello",
+        cache: {
+          hit: false,
+          key: "k",
+          source_url: sampleUrl,
+          cached_at: null,
+        },
+      },
+    });
+    expect(line).toContain("🤖");
+    expect(line).toContain("✨");
+    expect(line).toContain("1.82s");
+    expect(line).toContain("ai=0.87");
+    expect(line).toContain("porn=0.12");
+    expect(line).toContain("echo=0.08");
+    expect(line).toContain("likely_ai");
+    expect(line).toContain("@example");
+    expect(line).toContain(sampleUrl);
+  });
+
+  it("picks emoji from the strongest signal", () => {
+    const porn = mapJevToScore(jevOk(0.1, 0.91, 0.1));
+    expect(
+      signalEmoji({
+        ...porn,
+        quote: "",
+        cache: { hit: true, key: "k", source_url: sampleUrl, cached_at: null },
+      }),
+    ).toBe("🔞");
+  });
+
+  it("formats batch stats", () => {
+    expect(
+      formatBatchLog({
+        ms: 80,
+        items: 12,
+        unique: 10,
+        ok: 9,
+        fail: 3,
+        cache: 6,
+        live: 3,
+      }),
+    ).toBe("📦  80ms  n=12  unique=10  ok=9  fail=3  💾6  ✨3");
+  });
+
+  it("logs miss then hit from /v1/score", async () => {
+    stubTypeSafe(jevOk(0.88));
     const env = mockEnv();
-    const headers = {
-      "Content-Type": "application/json",
-      "CF-Connecting-IP": "9.9.9.9",
+    const payload = {
+      text: "It's not just a tool. It's a paradigm shift.",
+      url: sampleUrl,
+      kind: "tweet",
+      author: { handle: "@example" },
     };
-
-    for (let i = 0; i < DAILY_LIMIT; i++) {
-      const res = await handleRequest(
-        new Request("https://example.com/v1/score", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            text: `post ${i}`,
-            url: `https://x.com/u/status/${1000 + i}`,
-          }),
-        }),
-        env,
-      );
-      expect(res.status).toBe(200);
-    }
-
-    const blocked = await handleRequest(
+    await handleRequest(
       new Request("https://example.com/v1/score", {
         method: "POST",
-        headers,
-        body: JSON.stringify({
-          text: "one more",
-          url: "https://x.com/u/status/9999",
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       }),
       env,
     );
-    expect(blocked.status).toBe(429);
-    const body = (await blocked.json()) as {
-      error: string;
-      rate_limit: { remaining: number; used: number };
+    await handleRequest(
+      new Request("https://example.com/v1/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+      env,
+    );
+    const lines = vi
+      .mocked(console.log)
+      .mock.calls.map((c) => String(c[0]));
+    expect(lines.some((l) => l.includes("✨") && l.includes("ai=0.88"))).toBe(
+      true,
+    );
+    expect(lines.some((l) => l.includes("💾") && l.includes(sampleUrl))).toBe(
+      true,
+    );
+  });
+});
+
+describe("POST /v1/score/batch", () => {
+  it("scores unique urls and reuses cache", async () => {
+    const fetchMock = stubTypeSafe(jevOk(0.7));
+    const env = mockEnv();
+    const a = {
+      text: "first post",
+      url: "https://x.com/u/status/1",
     };
-    expect(body.error).toBe("rate_limited");
-    expect(body.rate_limit.remaining).toBe(0);
-    expect(body.rate_limit.used).toBe(DAILY_LIMIT);
+    const b = {
+      text: "second post",
+      url: "https://x.com/u/status/2",
+    };
+    const res = await handleRequest(
+      new Request("https://example.com/v1/score/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [a, b, a] }),
+      }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      results: { ok: boolean; url: string; result?: { ai_written: number } }[];
+    };
+    expect(body.results).toHaveLength(3);
+    expect(body.results.every((r) => r.ok)).toBe(true);
+    expect(body.results[0]?.url).toBe(a.url);
+    expect(body.results[2]?.url).toBe(a.url);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects empty items", async () => {
+    const res = await handleRequest(
+      new Request("https://example.com/v1/score/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [] }),
+      }),
+      mockEnv(),
+    );
+    expect(res.status).toBe(400);
   });
 });
 
@@ -295,7 +398,6 @@ describe("TypeSafe call", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "CF-Connecting-IP": "8.8.8.8",
         },
         body: JSON.stringify({
           text: "hello world",

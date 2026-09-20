@@ -1,0 +1,32 @@
+{
+  "name": "@tweet-911/extension",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Tweet 911 Chrome MV3 extension (WXT + React)",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "compile": "tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "animal-island-ui": "^1.13.0",
+    "classnames": "^2.5.1",
+    "naive-icons": "^1.1.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "1.1.5",
+    "typescript": "^5.9.3",
+    "wxt": "^0.21.3"
+  }
+}

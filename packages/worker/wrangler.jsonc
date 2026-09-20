@@ -3,6 +3,15 @@
   "name": "tweet-911",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
+  "dev": {
+    "ip": "127.0.0.1",
+    "port": 8788,
+    "inspector_port": 9230,
+    "enable_containers": false
+  },
+  "triggers": {
+    "crons": ["0 4 * * *"]
+  },
   "vars": {
     "TYPESAFE_MODEL": "jev-latest"
   },

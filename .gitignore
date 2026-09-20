@@ -2,5 +2,11 @@ node_modules/
 .wrangler/
 .dev.vars
 dist/
+.output/
+.wxt/
 *.log
 .DS_Store
+.env
+.env.*
+!.env.example
+bun-debug.log*

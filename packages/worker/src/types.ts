@@ -33,7 +33,7 @@ export interface Env {
   TYPESAFE_MODEL?: string;
   /** Optional Worker client auth */
   API_KEY?: string;
-  /** Persistent KV for URL cache + IP daily rate limits */
+  /** Persistent KV for URL cache */
   KV: KVNamespace;
 }
 
@@ -101,23 +101,13 @@ export interface CacheInfo {
   cached_at: string | null;
 }
 
-export interface RateLimitInfo {
-  limit: number;
-  remaining: number;
-  used: number;
-  reset: string;
-  day: string;
-}
-
 /** Full API response for POST /v1/score */
 export interface ScoreApiResponse extends ScoreResponse {
   quote: string;
   cache: CacheInfo;
-  rate_limit: RateLimitInfo;
 }
 
 export interface ErrorResponse {
   error: string;
   details?: string;
-  rate_limit?: RateLimitInfo;
 }

@@ -16,7 +16,29 @@ export interface CacheInfo {
   cached_at: string | null;
 }
 
-const CACHE_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
+export const CACHE_PREFIX = "cache:url:";
+export const CACHE_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
+const LIST_PAGE = 1000;
+
+export type CacheMeta = { cached_at: string };
+
+export type PurgeStats = {
+  scanned: number;
+  deleted: number;
+};
+
+export function isCacheExpired(cachedAt: string | undefined, now = Date.now()) {
+  if (!cachedAt) return true;
+  const t = Date.parse(cachedAt);
+  if (!Number.isFinite(t)) return true;
+  return now - t >= CACHE_TTL_SECONDS * 1000;
+}
+
+function metaCachedAt(metadata: unknown): string | undefined {
+  if (!metadata || typeof metadata !== "object") return undefined;
+  const value = (metadata as { cached_at?: unknown }).cached_at;
+  return typeof value === "string" ? value : undefined;
+}
 
 export function normalizeSourceUrl(url: string): string {
   try {
@@ -49,7 +71,7 @@ export async function cacheKeyForUrl(sourceUrl: string): Promise<string> {
   const hex = [...new Uint8Array(buf)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-  return `cache:url:${hex}`;
+  return `${CACHE_PREFIX}${hex}`;
 }
 
 export function buildQuote(text: string, maxLen = 240): string {
@@ -70,6 +92,10 @@ export async function readCache(
   }
   try {
     const entry = JSON.parse(raw) as CachedScore;
+    if (isCacheExpired(entry.cached_at)) {
+      await store.delete(key);
+      return null;
+    }
     return {
       entry,
       info: {
@@ -80,6 +106,7 @@ export async function readCache(
       },
     };
   } catch {
+    await store.delete(key);
     return null;
   }
 }
@@ -101,6 +128,7 @@ export async function writeCache(
   };
   await store.put(key, JSON.stringify(entry), {
     expirationTtl: CACHE_TTL_SECONDS,
+    metadata: { cached_at } satisfies CacheMeta,
   });
   return {
     hit: false,
@@ -108,4 +136,45 @@ export async function writeCache(
     source_url: normalized,
     cached_at,
   };
+}
+
+async function keyExpired(
+  store: KeyValueStore,
+  key: { name: string; metadata?: unknown },
+  now: number,
+) {
+  const fromMeta = metaCachedAt(key.metadata);
+  if (fromMeta) return isCacheExpired(fromMeta, now);
+  const raw = await store.get(key.name);
+  if (!raw) return true;
+  try {
+    const entry = JSON.parse(raw) as CachedScore;
+    return isCacheExpired(entry.cached_at, now);
+  } catch {
+    return true;
+  }
+}
+
+export async function purgeExpiredCache(
+  store: KeyValueStore,
+  now = Date.now(),
+): Promise<PurgeStats> {
+  let cursor: string | undefined;
+  let scanned = 0;
+  let deleted = 0;
+  do {
+    const page = await store.list({
+      prefix: CACHE_PREFIX,
+      cursor,
+      limit: LIST_PAGE,
+    });
+    for (const key of page.keys) {
+      scanned += 1;
+      if (!(await keyExpired(store, key, now))) continue;
+      await store.delete(key.name);
+      deleted += 1;
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return { scanned, deleted };
 }
