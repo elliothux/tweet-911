@@ -1,4 +1,4 @@
-.slop911-wrap {
+.tweet911-wrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -7,7 +7,7 @@
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
-.slop911-btn {
+.tweet911-btn {
   appearance: none;
   border: 1px solid rgba(127, 127, 127, 0.45);
   background: rgba(0, 0, 0, 0.04);
@@ -21,17 +21,17 @@
   line-height: 1.4;
 }
 
-.slop911-btn:hover {
+.tweet911-btn:hover {
   background: rgba(220, 38, 38, 0.12);
   border-color: rgba(220, 38, 38, 0.55);
 }
 
-.slop911-btn:disabled {
+.tweet911-btn:disabled {
   opacity: 0.6;
   cursor: wait;
 }
 
-.slop911-badge {
+.tweet911-badge {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
@@ -39,22 +39,22 @@
   white-space: nowrap;
 }
 
-.slop911-badge--ai {
+.tweet911-badge--ai {
   background: rgba(220, 38, 38, 0.18);
   color: #b91c1c;
 }
 
-.slop911-badge--human {
+.tweet911-badge--human {
   background: rgba(22, 163, 74, 0.18);
   color: #15803d;
 }
 
-.slop911-badge--mixed {
+.tweet911-badge--mixed {
   background: rgba(202, 138, 4, 0.18);
   color: #a16207;
 }
 
-.slop911-badge--err {
+.tweet911-badge--err {
   background: rgba(100, 100, 100, 0.2);
   color: #444;
 }

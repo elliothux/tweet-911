@@ -4,8 +4,10 @@ import { DAILY_LIMIT } from "../src/rateLimit";
 import {
   DEFAULT_MODEL,
   TYPESAFE_API_URL,
+  buildState,
   labelFromNoul,
   mapJevToScore,
+  validateScoreBody,
 } from "../src/score";
 import { MemoryStore, kvFromBinding } from "../src/storage";
 import type { Env, JevResponse } from "../src/types";
@@ -27,15 +29,21 @@ function mockEnv(overrides: Partial<Env> = {}): Env {
   };
 }
 
-function jevOk(noul = 0.87): JevResponse {
+function jevOk(
+  ai = 0.87,
+  porn = 0.12,
+  paraphrase = 0.08,
+): JevResponse {
   return {
     model: "jev-1.13.0",
     answers: {
-      ai_written: { type: "noul", noul },
-      ai_score: {
+      ai_written: { type: "noul", noul: ai },
+      porn_solicitation: { type: "noul", noul: porn },
+      paraphrase_bot: { type: "noul", noul: paraphrase },
+      risk_score: {
         type: "score",
-        score: 1.8,
-        confidence: 0.91,
+        score: 0.4,
+        confidence: 0.8,
       },
     },
     usage: { input_tokens: 100, output_tokens: 40 },
@@ -68,10 +76,61 @@ describe("labelFromNoul", () => {
 });
 
 describe("mapJevToScore", () => {
-  it("maps mocked Jev response", () => {
-    const out = mapJevToScore(jevOk(0.87));
+  it("maps mocked Jev response with new fields", () => {
+    const out = mapJevToScore(jevOk(0.87, 0.9, 0.2));
     expect(out.ai_written).toBe(0.87);
+    expect(out.porn_solicitation).toBe(0.9);
+    expect(out.paraphrase_bot).toBe(0.2);
+    expect(out.ai_label).toBe("likely_ai");
     expect(out.label).toBe("likely_ai");
+    expect(out.solicitation_label).toBe("likely_solicitation");
+    expect(out.paraphrase_label).toBe("likely_original");
+    expect(out.risk_score).toBe(0.4);
+  });
+});
+
+describe("buildState / validateScoreBody", () => {
+  it("includes author object + in_reply_to in state", () => {
+    const state = buildState({
+      text: "restating the parent",
+      url: sampleUrl,
+      kind: "reply",
+      platform: "x",
+      author: { handle: "@bot", display_name: "Bot", bio: "dm me" },
+      in_reply_to: {
+        author: { handle: "@op" },
+        text: "original claim here",
+      },
+    });
+    expect(state.kind).toBe("reply");
+    expect(state.author).toEqual({
+      handle: "@bot",
+      display_name: "Bot",
+      bio: "dm me",
+    });
+    expect(state.in_reply_to).toEqual({
+      author: { handle: "@op" },
+      text: "original claim here",
+    });
+  });
+
+  it("accepts string author for backward compat", () => {
+    const v = validateScoreBody({
+      text: "hello",
+      url: sampleUrl,
+      author: "@legacy",
+    });
+    expect(v.ok).toBe(true);
+    if (v.ok) expect(v.data.author).toBe("@legacy");
+  });
+
+  it("rejects linkedin platform", () => {
+    const v = validateScoreBody({
+      text: "hello",
+      url: sampleUrl,
+      platform: "linkedin",
+    });
+    expect(v.ok).toBe(false);
   });
 });
 
@@ -125,6 +184,8 @@ describe("cache + quote + rate_limit", () => {
       text: "It's not just a tool. It's a paradigm shift.",
       platform: "x",
       url: sampleUrl,
+      kind: "tweet",
+      author: { handle: "@example", display_name: "Example" },
     };
 
     const miss = await handleRequest(
@@ -141,11 +202,21 @@ describe("cache + quote + rate_limit", () => {
       quote: string;
       rate_limit: { used: number; remaining: number; limit: number };
       ai_written: number;
+      porn_solicitation: number;
+      paraphrase_bot: number;
+      ai_label: string;
+      solicitation_label: string;
+      paraphrase_label: string;
     };
     expect(missBody.cache.hit).toBe(false);
     expect(missBody.cache.cached_at).toBeTruthy();
     expect(missBody.quote).toContain("paradigm");
     expect(missBody.ai_written).toBe(0.88);
+    expect(missBody.porn_solicitation).toBe(0.12);
+    expect(missBody.paraphrase_bot).toBe(0.08);
+    expect(missBody.ai_label).toBe("likely_ai");
+    expect(missBody.solicitation_label).toBe("likely_clean");
+    expect(missBody.paraphrase_label).toBe("likely_original");
     expect(missBody.rate_limit.used).toBe(1);
     expect(missBody.rate_limit.remaining).toBe(DAILY_LIMIT - 1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -161,10 +232,12 @@ describe("cache + quote + rate_limit", () => {
     const hitBody = (await hit.json()) as {
       cache: { hit: boolean };
       ai_written: number;
+      porn_solicitation: number;
       rate_limit: { used: number };
     };
     expect(hitBody.cache.hit).toBe(true);
     expect(hitBody.ai_written).toBe(0.88);
+    expect(hitBody.porn_solicitation).toBe(0.12);
     expect(hitBody.rate_limit.used).toBe(2);
     expect(fetchMock).toHaveBeenCalledTimes(1); // no second TypeSafe call
   });
@@ -215,7 +288,7 @@ describe("cache + quote + rate_limit", () => {
 });
 
 describe("TypeSafe call", () => {
-  it("posts to TypeSafe on miss", async () => {
+  it("posts to TypeSafe on miss with expanded questions", async () => {
     const fetchMock = stubTypeSafe(jevOk(0.7));
     const res = await handleRequest(
       new Request("https://example.com/v1/score", {
@@ -224,7 +297,13 @@ describe("TypeSafe call", () => {
           "Content-Type": "application/json",
           "CF-Connecting-IP": "8.8.8.8",
         },
-        body: JSON.stringify({ text: "hello world", url: sampleUrl }),
+        body: JSON.stringify({
+          text: "hello world",
+          url: sampleUrl,
+          kind: "reply",
+          author: { handle: "@r", display_name: "R" },
+          in_reply_to: { text: "parent text", author: "@op" },
+        }),
       }),
       mockEnv(),
     );
@@ -233,6 +312,12 @@ describe("TypeSafe call", () => {
     expect(url).toBe(TYPESAFE_API_URL);
     const payload = JSON.parse(String(init.body));
     expect(payload.model).toBe(DEFAULT_MODEL);
+    expect(payload.questions.ai_written).toBeTruthy();
+    expect(payload.questions.porn_solicitation).toBeTruthy();
+    expect(payload.questions.paraphrase_bot).toBeTruthy();
+    expect(payload.questions.risk_score).toBeTruthy();
+    expect(payload.state.in_reply_to.text).toBe("parent text");
+    expect(payload.state.kind).toBe("reply");
   });
 });
 

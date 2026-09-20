@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "slop-911",
+  "name": "tweet-911",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "vars": {

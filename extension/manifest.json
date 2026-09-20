@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Slop 911",
-  "version": "0.1.0",
-  "description": "On-demand AI-writing score for X and LinkedIn posts via a Cloudflare Worker + TypeSafe Jev.",
+  "name": "Tweet 911",
+  "version": "0.2.0",
+  "description": "On-demand AI / solicitation / paraphrase-bot scores for X posts and replies via Cloudflare Worker + TypeSafe Jev.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://*.workers.dev/*",
@@ -19,12 +19,6 @@
       "js": ["content/shared.js", "content/x.js"],
       "css": ["styles/button.css"],
       "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://www.linkedin.com/*", "https://linkedin.com/*"],
-      "js": ["content/shared.js", "content/linkedin.js"],
-      "css": ["styles/button.css"],
-      "run_at": "document_idle"
     }
   ],
   "options_ui": {
@@ -32,7 +26,7 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Slop 911",
+    "default_title": "Tweet 911",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

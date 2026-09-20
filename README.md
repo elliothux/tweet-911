@@ -1,24 +1,30 @@
-# Slop 911
+# Tweet 911
 
-Chrome extension + Cloudflare Worker that scores whether an X or LinkedIn post looks AI-written.
+Chrome extension + Cloudflare Worker that scores X posts, articles, and replies for:
 
-Click a small **911** button on a post → extract text + image URLs → `POST /v1/score` on your Worker → TypeSafe **Jev** via `https://api.typesafe.ai/v1/systemone` returns a calibrated probability and label.
+- **AI-written** — classic LLM tells
+- **色情引流 / porn solicitation** — sexual traffic bait, offline meetup invites, cross-platform redirects (快手等)
+- **Paraphrase-bot comments** — replies that mostly restate the parent post
 
-**Architecture:** the Worker API is the product (`content → score`). The extension is a thin on-demand client. Nothing calls `api.typesafe.ai`.
+Judgment uses **author profile signals + post/comment text together** (handle, display name, bio when available, text, and parent post for replies).
+
+Click a small **911** button on a tweet or reply → extract text + image URLs + author → `POST /v1/score` on your Worker → TypeSafe **Jev** via `https://api.typesafe.ai/v1/systemone`.
+
+**Architecture:** the Worker API is the product (`content → score`). The extension is a thin on-demand client. Nothing calls `api.typesafe.ai` from the browser.
 
 ```
 ┌─────────────┐     POST /v1/score      ┌──────────────────┐
 │  Extension  │ ───────────────────────► │ CF Worker        │
-│  (MV3)      │ ◄─────────────────────── │  env.AI → Jev    │
-└─────────────┘   { ai_written, label }  └──────────────────┘
+│  (MV3)      │ ◄─────────────────────── │  → TypeSafe Jev  │
+└─────────────┘   { ai_written, … }      └──────────────────┘
 ```
 
 ## Repo layout
 
 ```
-slop-911/
+tweet-911/
 ├── worker/          Cloudflare Worker (TypeScript)
-├── extension/       Chrome MV3 extension
+├── extension/       Chrome MV3 extension (X only)
 └── README.md
 ```
 
@@ -27,14 +33,14 @@ slop-911/
 ```bash
 cd worker
 npm install
-npm test          # vitest + mocked AI binding (no CF account needed)
+npm test          # vitest + mocked TypeSafe fetch (no CF account needed)
 npm run dev       # wrangler dev
 npm run deploy    # wrangler deploy
 ```
 
 ### Config
 
-- `wrangler.jsonc` — no AI binding; Worker fetches TypeSafe over HTTPS
+- `wrangler.jsonc` — worker name `tweet-911`; KV binding `KV`; var `TYPESAFE_MODEL=jev-latest`
 - Required: `npx wrangler secret put TYPESAFE_API_KEY`
 - Optional Worker client auth: `npx wrangler secret put API_KEY`  
   When set, clients must send `Authorization: Bearer <key>` or `X-API-Key: <key>`.  
@@ -46,33 +52,88 @@ npm run deploy    # wrangler deploy
 | Method | Path | Body / notes |
 |--------|------|----------------|
 | `GET` | `/health` | `{ "ok": true }` |
-| `POST` | `/v1/score` | `{ text, images?, platform?, author?, url? }` |
+| `POST` | `/v1/score` | see below |
 | `OPTIONS` | `*` | CORS preflight (reflects `chrome-extension://` and localhost Origins) |
 
-**Validation:** non-empty `text` **or** at least one image URL.
+**Request body:**
+
+```json
+{
+  "text": "…",
+  "images": ["https://…"],
+  "url": "https://x.com/user/status/123",
+  "kind": "tweet",
+  "platform": "x",
+  "author": {
+    "handle": "@user",
+    "display_name": "User",
+    "bio": "optional bio"
+  },
+  "in_reply_to": {
+    "author": { "handle": "@op" },
+    "text": "parent tweet text"
+  }
+}
+```
+
+- `url` is **required** (cache key).
+- `kind`: `"tweet" | "article" | "reply"` (optional).
+- `platform`: only `"x"` (LinkedIn removed).
+- `author`: object preferred; a string is still accepted for backward compatibility.
+- `in_reply_to`: parent tweet for replies (needed for `paraphrase_bot`).
+
+**Validation:** non-empty `text` **or** at least one image URL; valid http(s) `url`.
 
 **Response example:**
 
 ```json
 {
   "ai_written": 0.87,
-  "score": 1.8,
-  "confidence": 0.91,
+  "porn_solicitation": 0.12,
+  "paraphrase_bot": 0.08,
+  "risk_score": 0.4,
+  "risk_confidence": 0.8,
+  "ai_label": "likely_ai",
+  "solicitation_label": "likely_clean",
+  "paraphrase_label": "likely_original",
   "label": "likely_ai",
+  "quote": "It's not just a tool. It's a paradigm shift…",
+  "cache": {
+    "hit": false,
+    "key": "cache:url:…",
+    "source_url": "https://x.com/user/status/123",
+    "cached_at": "2026-09-20T05:00:00.000Z"
+  },
+  "rate_limit": {
+    "limit": 30,
+    "remaining": 29,
+    "used": 1,
+    "reset": "2026-09-21T00:00:00.000Z",
+    "day": "2026-09-20"
+  },
   "model": "jev-1.13.0",
   "usage": { "input_tokens": 100, "output_tokens": 40 }
 }
 ```
 
-Labels: `likely_ai` (noul ≥ 0.65), `likely_human` (≤ 0.35), else `uncertain`.
+**Labels** (noul thresholds 0.65 / 0.35):
 
+| Field | High | Mid | Low |
+|-------|------|-----|-----|
+| `ai_label` | `likely_ai` | `uncertain` | `likely_human` |
+| `solicitation_label` | `likely_solicitation` | `uncertain` | `likely_clean` |
+| `paraphrase_label` | `likely_paraphrase` | `uncertain` | `likely_original` |
+
+`label` is a backward-compat alias of `ai_label`.
+
+Optional `risk_score` (Jev score): Clean / Suspicious / Clear spam-bait.
 
 ### Cache & rate limit
 
 - **Cache key:** normalized source `url` (required). Hits skip TypeSafe.
-- **Response extras:** `quote` (text excerpt), `cache: { hit, key, source_url, cached_at }`, `rate_limit: { limit, remaining, used, reset, day }`.
+- **Response extras:** `quote`, `cache`, `rate_limit`.
 - **Rate limit:** 30 requests per client IP per UTC day (`CF-Connecting-IP`). Exceeded → HTTP `429`.
-- **Storage:** Workers KV binding `KV` (namespace title `slop-911`).
+- **Storage:** Workers KV binding `KV` (same namespace ids as before).
 
 ### TypeSafe API key
 
@@ -85,35 +146,35 @@ npx wrangler secret put TYPESAFE_API_KEY
 
 Optional: `TYPESAFE_MODEL` (default `jev-latest` via wrangler vars).
 
-No Cloudflare AI Gateway / Unified Billing credits required.
-
 ### curl
 
 ```bash
-curl -sS https://slop-911.hqy841440305.workers.dev/v1/score \
+curl -sS https://tweet-911.hqy841440305.workers.dev/v1/score \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer YOUR_KEY' \
   -d '{
     "text": "It'\''s not just a tool. It'\''s a paradigm shift that will redefine the landscape.",
     "platform": "x",
-    "author": "@example"
+    "kind": "tweet",
+    "url": "https://x.com/example/status/1",
+    "author": { "handle": "@example", "display_name": "Example" }
   }'
 ```
 
 Health:
 
 ```bash
-curl -sS https://slop-911.hqy841440305.workers.dev/health
+curl -sS https://tweet-911.hqy841440305.workers.dev/health
 ```
 
 ## Extension
 
 1. Open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the `extension/` folder.
 2. Open the extension **Options** page and set:
-   - **API base URL** — your Worker URL (no trailing slash)
+   - **API base URL** — default `https://tweet-911.hqy841440305.workers.dev` (no trailing slash)
    - **API key** — only if you set `API_KEY` on the Worker
-3. Visit [x.com](https://x.com) or [linkedin.com](https://www.linkedin.com) feed. On each post, click **911** (on-demand only — nothing is auto-scored).
-4. A badge appears: e.g. `AI 87%` / `Human` / `~50%`.
+3. Visit [x.com](https://x.com). On each tweet **and reply**, click **911** (on-demand only — nothing is auto-scored).
+4. A badge summarizes flags, e.g. `AI 87%` / `AI 80% · 引流 90%` / `Clean`.
 
 ### Host permissions
 
@@ -122,7 +183,8 @@ curl -sS https://slop-911.hqy841440305.workers.dev/health
 ### Selectors
 
 - **X / Twitter:** `article[data-testid="tweet"]`, text `tweetText`, images `tweetPhoto`, author `User-Name`.
-- **LinkedIn:** best-effort (`feed-shared-update-v2`, `update-components-*`). LinkedIn’s DOM changes often — tweak `content/linkedin.js` if buttons don’t appear.
+- On status pages, replies include `in_reply_to` from the focal (first) tweet when possible.
+- LinkedIn support has been removed.
 
 ## License
 

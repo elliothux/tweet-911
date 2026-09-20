@@ -1,16 +1,63 @@
 (function (global) {
-  const NS = "slop911";
+  const NS = "tweet911";
 
+  function pct(n) {
+    return Math.round((n ?? 0) * 100);
+  }
+
+  /**
+   * Badge summarizing raised flags, e.g. "AI 80% · 引流 90%" or "Clean".
+   */
   function formatBadge(result) {
-    const pct = Math.round((result.ai_written ?? 0) * 100);
-    if (result.label === "likely_ai") return `AI ${pct}%`;
-    if (result.label === "likely_human") return "Human";
-    return `~${pct}%`;
+    const parts = [];
+    const ai = result.ai_written ?? 0;
+    const porn = result.porn_solicitation ?? 0;
+    const para = result.paraphrase_bot ?? 0;
+
+    if (ai >= 0.5 || result.ai_label === "likely_ai") {
+      parts.push(`AI ${pct(ai)}%`);
+    }
+    if (porn >= 0.5 || result.solicitation_label === "likely_solicitation") {
+      parts.push(`引流 ${pct(porn)}%`);
+    }
+    if (para >= 0.5 || result.paraphrase_label === "likely_paraphrase") {
+      parts.push(`复述 ${pct(para)}%`);
+    }
+
+    if (parts.length === 0) {
+      if (
+        result.ai_label === "likely_human" &&
+        (result.solicitation_label === "likely_clean" || porn < 0.35) &&
+        (result.paraphrase_label === "likely_original" || para < 0.35)
+      ) {
+        return "Clean";
+      }
+      return `~AI ${pct(ai)}%`;
+    }
+    return parts.join(" · ");
   }
 
   function badgeClass(result) {
-    if (result.label === "likely_ai") return `${NS}-badge--ai`;
-    if (result.label === "likely_human") return `${NS}-badge--human`;
+    const porn = result.porn_solicitation ?? 0;
+    const para = result.paraphrase_bot ?? 0;
+    const ai = result.ai_written ?? 0;
+    if (
+      result.solicitation_label === "likely_solicitation" ||
+      porn >= 0.65 ||
+      result.ai_label === "likely_ai" ||
+      ai >= 0.65 ||
+      result.paraphrase_label === "likely_paraphrase" ||
+      para >= 0.65
+    ) {
+      return `${NS}-badge--ai`;
+    }
+    if (
+      result.ai_label === "likely_human" &&
+      porn <= 0.35 &&
+      para <= 0.35
+    ) {
+      return `${NS}-badge--human`;
+    }
     return `${NS}-badge--mixed`;
   }
 
@@ -18,8 +65,8 @@
    * Inject Score button into a post container. onExtract() returns payload for API.
    */
   function injectButton(container, { platform, onExtract }) {
-    if (!container || container.dataset.slop911 === "1") return;
-    container.dataset.slop911 = "1";
+    if (!container || container.dataset.tweet911 === "1") return;
+    container.dataset.tweet911 = "1";
 
     const wrap = document.createElement("div");
     wrap.className = `${NS}-wrap`;
@@ -28,7 +75,7 @@
     btn.type = "button";
     btn.className = `${NS}-btn`;
     btn.textContent = "911";
-    btn.title = "Score AI-writing (Slop 911)";
+    btn.title = "Score with Tweet 911 (AI / 引流 / paraphrase)";
 
     const badge = document.createElement("span");
     badge.className = `${NS}-badge`;
@@ -87,5 +134,5 @@
     return mo;
   }
 
-  global.Slop911 = { injectButton, observe, formatBadge, NS };
+  global.Tweet911 = { injectButton, observe, formatBadge, NS };
 })(typeof globalThis !== "undefined" ? globalThis : window);

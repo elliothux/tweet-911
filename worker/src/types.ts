@@ -1,12 +1,29 @@
-export type Platform = "x" | "linkedin";
+export type Platform = "x";
+
+export type ContentKind = "tweet" | "article" | "reply";
+
+export interface AuthorInfo {
+  handle?: string;
+  display_name?: string;
+  bio?: string;
+}
+
+export interface InReplyTo {
+  author?: AuthorInfo | string;
+  text?: string;
+}
 
 export interface ScoreRequest {
   text?: string;
   images?: string[];
   platform?: Platform;
-  author?: string;
+  /** Post author — object preferred; string kept for backward compat. */
+  author?: AuthorInfo | string;
   /** Source post URL — required; used as cache key. */
   url: string;
+  kind?: ContentKind;
+  /** Parent tweet for replies (paraphrase_bot needs this). */
+  in_reply_to?: InReplyTo;
 }
 
 export interface Env {
@@ -37,7 +54,9 @@ export interface JevResponse {
   model?: string;
   answers?: {
     ai_written?: JevNoulAnswer;
-    ai_score?: JevScoreAnswer;
+    porn_solicitation?: JevNoulAnswer;
+    paraphrase_bot?: JevNoulAnswer;
+    risk_score?: JevScoreAnswer;
     [key: string]: unknown;
   };
   usage?: {
@@ -46,13 +65,31 @@ export interface JevResponse {
   };
 }
 
-export type ScoreLabel = "likely_ai" | "uncertain" | "likely_human";
+export type AiLabel = "likely_ai" | "uncertain" | "likely_human";
+export type SolicitationLabel =
+  | "likely_solicitation"
+  | "uncertain"
+  | "likely_clean";
+export type ParaphraseLabel =
+  | "likely_paraphrase"
+  | "uncertain"
+  | "likely_original";
+
+/** @deprecated Prefer ai_label */
+export type ScoreLabel = AiLabel;
 
 export interface ScoreResponse {
   ai_written: number;
-  score?: number;
-  confidence?: number;
-  label: ScoreLabel;
+  porn_solicitation: number;
+  paraphrase_bot: number;
+  /** Optional risk score from Jev (0=Clean … 2=Clear spam-bait). */
+  risk_score?: number;
+  risk_confidence?: number;
+  ai_label: AiLabel;
+  solicitation_label: SolicitationLabel;
+  paraphrase_label: ParaphraseLabel;
+  /** Backward-compat alias of ai_label. */
+  label: AiLabel;
   model: string;
   usage?: JevResponse["usage"];
 }

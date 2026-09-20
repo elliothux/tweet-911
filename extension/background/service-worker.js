@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = "https://slop-911.hqy841440305.workers.dev";
+const DEFAULT_API_BASE = "https://tweet-911.hqy841440305.workers.dev";
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== "SCORE_POST") return false;
@@ -25,7 +25,7 @@ async function scorePost(payload) {
   const { apiBaseUrl, apiKey } = await getConfig();
   if (!apiBaseUrl || apiBaseUrl.includes("YOUR_SUBDOMAIN")) {
     throw new Error(
-      "Set your Worker API base URL in Slop 911 extension options.",
+      "Set your Worker API base URL in Tweet 911 extension options.",
     );
   }
 
